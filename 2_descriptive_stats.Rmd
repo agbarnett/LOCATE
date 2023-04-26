@@ -7,6 +7,7 @@ bibliography: references.bib
 ---
 
 ```{r setup, include=FALSE}
+# could add below to YAML
 #    reference_docx: rmarkdown-styles-SAP.docx
 knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, error=FALSE, comment='', dpi=400)
 options(width=1000) # Wide pages
@@ -18,19 +19,15 @@ library(tidyr)
 library(flextable)
 library(janitor)
 library(tableone) # for giant baseline table
+#library(gtsummary) # alternative for giant baseline table - does not work as label column is too wide
 library(stringr)
 library(visdat) # for missing data visualisation
-#library(survival)
-#library(cmprsk)
-#library(survminer) # for nice plots of competing risks
 # for graphics
 library(ggplot2)
-#library(colorspace) 
-#library(Polychrome)
 g.theme = theme_bw() + theme(panel.grid.minor = element_blank())
 cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 
-# data from 0_read_data_redcap.R, should change to 1_combine_data at some time
+# data from 0_read_data_redcap.R
 load('data/0_redcap_data.RData')
 # data from 0_read_data_scans.R
 load('data/0_scans.RData')
@@ -61,7 +58,8 @@ dates = filter(data, !is.na(randomised)) %>% # must have been randomised
 # date_today = potential
 # date_returned = excluded / randomised
 # date_withdrew = withdrew
-approached = filter(data, !is.na(date_today), # all patients
+approached = filter(data, 
+                    !is.na(date_today), # all patients
                     date_today <= dates$max) %>% # only up to last randomised day (don't want post-random stuff)
   mutate(week_num = as.numeric(format(date_today, "%Y")) + as.numeric(format(date_today, "%W"))/53) %>%
   group_by(week_num) %>%
@@ -112,16 +110,19 @@ for_text = group_by(to_plot, event) %>%
   arrange(event, desc(week_num)) %>%
   slice(1) %>%
   ungroup()
+
+# export
+jpeg('figures/recruitment.jpg', width=6, height=4, units='in', res=500, quality=100)
+print(time_plot)
+invisible(dev.off())
 ```
-
-
 
 The final numbers are: `r filter(for_text, event=='Approached') %>% pull(cum_n)` approached, `r filter(for_text, event=='Excluded') %>% pull(cum_n)` excluded and `r filter(for_text, event=='Randomised') %>% pull(cum_n)` randomised. The first patient was randomised on `r format(dates$min, '%d-%b-%Y')` and the last on `r format(dates$max, '%d-%b-%Y')`.
 
 ## CONSORT flow diagram
 
 ```{r consort, fig.width=7.5, fig.height=8}
-for_consort = select(data, record_id, randomised, withdrew_or_excluded, reason, starts_with('date_'))
+for_consort = select(data, record_id, randomised, withdrew_or_excluded, reason, starts_with('date_'), ends_with('_date'))
 #
 pp = select(scans, record_id) %>%
   unique() %>% # safety net for duplicated scans
@@ -137,7 +138,7 @@ There were no participants who were pregnant (this was an exclusion criterion).
 All but one patient randomised to the scan completed their scan, hence the per protocol analysis will be almost identical to the intention-to-treat analysis. This means a per protocol analysis will not likely be needed.
 
 ```{r, include=FALSE}
-# just for randomised
+# now just for randomised
 data = filter(data, !is.na(randomised))
 ```
 
@@ -162,9 +163,15 @@ tab1 <- CreateTableOne(vars = myVars,
                        factorVars = catVars, 
                        strata = 'randomised', 
                        test = FALSE, 
+                       includeNA = TRUE,
                        addOverall = FALSE)
 #flextable(data.frame(tab1))
-print(tab1, catDigits=0, contDigits=0, explain=TRUE, formatOptions = list(big.mark = ","))
+print(tab1, 
+      catDigits = 1, # will no longer allow 0
+      contDigits = 1, 
+      explain = TRUE, 
+      showAllLevels = TRUE,
+      formatOptions = list(big.mark = ","))
 ```
 
 The table shows numbers and percentages in round brackets for categorical variables, and the mean and standard deviation for continuous variables. We do not compare the two randomised groups using statistical tests as this is not good practice [@Altman1985]. Instead we present a graphical summary of the differences between groups.
@@ -187,10 +194,8 @@ The plot shows no strong concerns about the trial. There is a small shortage of 
 ## Ultrasound (from referral letter at baseline)
 
 ```{r}
-# to add liver size when clean
-
 ## Vector of all variables to summarise (in order of form)
-myVars <- c("spleen", "fatty_liver","liver_outline")
+myVars <- c("spleen", "fatty_liver","liver_outline", "liver_size")
 ## Vector of categorical variables
 catVars <- c("spleen", "fatty_liver","liver_outline")
 ## Create a TableOne object
@@ -199,8 +204,14 @@ tab2 <- CreateTableOne(vars = myVars,
                        factorVars = catVars, 
                        strata = 'randomised', 
                        test = FALSE, 
+                       includeNA = TRUE,
                        addOverall = FALSE) # no total column
-print(tab2, catDigits=0, contDigits=0, explain=TRUE, formatOptions = list(big.mark = ","))
+print(tab2, 
+      catDigits = 1, # no longer allows 0 
+      contDigits = 1, 
+      explain = TRUE, 
+            showAllLevels = TRUE,
+formatOptions = list(big.mark = ","))
 ```
 
 The table shows numbers and percentages in round brackets.
@@ -209,20 +220,30 @@ The table shows numbers and percentages in round brackets.
 
 ```{r}
 ## Vector of all variables to summarise (in order of form)
-myVars <- c("re_referral", "referral_cat", "referral_time")
+myVars <- c("re_referral", "referral_cat", "referral_time", 'previous_hepatology')
 ## Vector of categorical variables
-catVars <- c("re_referral", "referral_cat")
+catVars <- c("re_referral", "referral_cat",'previous_hepatology')
 ## Create a TableOne object
 tab3 <- CreateTableOne(vars = myVars, 
                        data = data, 
                        factorVars = catVars, 
                        strata = 'randomised', 
                        test = FALSE, 
+                       includeNA = TRUE,
                        addOverall = FALSE) # no total column
-print(tab3, catDigits=0, contDigits=0, explain=TRUE, formatOptions = list(big.mark = ","))
+print(tab3, 
+      catDigits = 1, # no longer allows 0 
+      contDigits = 1, 
+      explain = TRUE, 
+            showAllLevels = TRUE,
+formatOptions = list(big.mark = ","))
 ```
 
 The table shows numbers and percentages in round brackets for categorical variables, and the mean and standard deviation for the continuous variable. `referral_time` is the time in days between the GP referral and the randomisation into the study.
+
+Every patient had a mention of previous evaluation in a specialist hepatology clinic in the previous 12 months?
+
+If "yes" do not approach this participant
 
 ## Was the information dated within six months of the referral date?
 
@@ -232,12 +253,21 @@ to_table = select(data, ends_with('_6m')) %>%
   group_by(name, value) %>%
   tally() %>%
   group_by(name) %>%
-  mutate(name = str_remove_all(name, '_6m'),
+  mutate(#value = ifelse(value =='', 'Missing', value),
+         name = str_remove_all(name, '_6m'),
          percent = prop.table(n),
          percent = round(percent*100),
          cell = paste(n, ' (', percent, ')', sep='')) %>%
   select(name, cell, value) %>%
   pivot_wider(values_from = 'cell', names_from='value') %>%
+  mutate(name = case_when(
+    name == 'bmi' ~ 'Height/Weight/BMI',
+    name == 'fbc' ~ 'Full blood count' ,
+    name == 'liver' ~ 'Liver function tests',
+    name == 'hep' ~ 'Hepatitis blood tests',
+    name == 'iron' ~ 'Iron studies',
+    name == 'us' ~ 'Ultrasound') 
+  ) %>%
   rename('Variable' = 'name',
          'Missing' = 'NA')
 ftab = flextable(to_table) %>%
@@ -246,7 +276,7 @@ ftab = flextable(to_table) %>%
 ftab
 ```
 
-The table shows the counts and percentages in round brackets.
+The table shows the counts and percentages in round brackets. Much of the information is older than six months.
 
 ## Histograms of continuous variables
 
@@ -263,11 +293,12 @@ gplot = ggplot(data=for_plot, aes(x=value))+
 gplot
 ```
 
-`eq5d_b` is EQ-5D at baseline. 
+`eq5d_b` is EQ-5D at baseline. Height and weight are from the GP referral letter.
 
 # Scan data
 
 This section gives summary statistics on the Fibroscan data for the new model of care group.
+
 
 ## Frequencies for categorical variables
 
@@ -292,6 +323,8 @@ ftab = flextable(freq) %>%
   merge_v(j=1)
 ftab
 ```
+
+The table shows frequencies and percentages. Results are combined across the two randomised groups.
 
 ## Histograms of continuous variables from scans
 
@@ -318,13 +351,15 @@ pats = filter(data, randomised == 'New model of care') %>%
 times = full_join(pats, scans, by='record_id') %>%
   mutate(time = as.numeric(exam_date - date_returned))
 #
-gplot = ggplot(data=times, aes(x=time))+
+gplot = ggplot(data = times, aes(x = time))+
   geom_histogram(col='grey88', fill='skyblue')+
   g.theme + 
   xlab('Time (days)')+
   ylab('Count')
 gplot
 ```
+
+_This is only for participants randomised to the new model of care._
 
 #### Summary statistics of times
 
@@ -344,6 +379,42 @@ ftab
 ```
 
 The statistics are in days.
+
+# Notes data
+
+In this section examine the data extracted from the patients' notes at the one year follow-up.
+
+```{r}
+# make dead variable
+data = mutate(data, 
+              Dead = as.numeric(!is.na(death)),
+              Dead = factor(Dead, levels=0:1, labels=c('No','Yes')))
+## Vector of all variables to summarise (in order of form)
+myVars <- c('appointment_booked', 'additional_appointments', 'fibroscan', 'ed_presentations', 'hcc', 'variceal_bleeding','other_diagnosis',  'medications','studies','Dead')
+## Vector of categorical variables
+catVars <- myVars # all categorical
+# relabel to fit
+data = mutate(data, 
+              appointment_booked = as.character(appointment_booked),
+              appointment_booked = ifelse(appointment_booked=='Yes - the participant has completed the appointment', 'Yes, completed', appointment_booked),
+              appointment_booked = ifelse(appointment_booked=='Yes - the participant has an upcoming appointment', 'Yes, upcoming', appointment_booked),
+              appointment_booked = ifelse(appointment_booked=='Yes, but the participant did not attend', 'Yes, did not attend', appointment_booked))
+## Create a TableOne object
+tab1 <- CreateTableOne(vars = myVars, 
+                       data = data, 
+                       factorVars = catVars, 
+                       strata = 'randomised', 
+                       test = FALSE, 
+                       includeNA = TRUE,
+                       addOverall = FALSE)
+#flextable(data.frame(tab1))
+print(tab1, 
+      catDigits = 1, # will no longer allow 0
+      contDigits = 1, 
+      explain = TRUE, 
+      showAllLevels = TRUE, # useful for studies, which otherwise just shows NA
+      formatOptions = list(big.mark = ","))
+```
 
 # Missing data
 
@@ -399,7 +470,7 @@ vis_miss(for_missing) +
   scale_y_continuous(expand=c(0,0))
 ```
 
-## Missing data at 12 month follow-up
+## Missing data at 12 month telephone follow-up
 
 ```{r missing_12, fig.width=9, fig.height=5}
 #
@@ -416,7 +487,22 @@ vis_miss(for_missing) +
   scale_y_continuous(expand=c(0,0))
 ```
 
-_Ignore for now as 12 month follow-up is not complete._
+The vertical black 'stripes' show those people who had complete missing data, likely because they could not be contacted on the phone.
 
+## Missing data from notes follow-up
+
+```{r missing_notes, fig.width=9, fig.height=5}
+excluded_notes = c('note')
+form_vars = filter(dictionary, form_name =='form_1') %>%
+  filter(!variable_field_name %in% excluded_notes) %>%
+  pull(variable_field_name)
+for_missing = select(data, all_of(form_vars))
+vis_miss(for_missing) +
+  ylab('Participant') +
+  coord_flip()+
+  theme(axis.text.x = element_text(angle=0))+
+  scale_x_discrete(expand=c(0,0), limits = rev(form_vars))+ # order variables
+  scale_y_continuous(expand=c(0,0))
+```
 
 # References

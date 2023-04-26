@@ -113,11 +113,14 @@ View(filter(scans, record_id == double[4]))
 scans = group_by(scans, record_id) %>%
   select(-file) %>% # source file no longer needed
   arrange(record_id, desc(exam_datetime), desc(exam_duration_min)) %>% # desc for latest time and longest duration
+  slice(1) %>%
   ungroup() %>%
   mutate(centre = as.numeric(centre),
          num = as.numeric(num)) 
 
 # save
 save(scans, file = 'data/0_scans.RData')
+
+table(table(scans$record_id)) # should be 1
 
 

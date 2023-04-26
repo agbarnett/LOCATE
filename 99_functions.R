@@ -44,3 +44,60 @@ drinks_factor = function(x){
   y = factor(y, levels=0:4, labels= c('Never','Less than monthly','Monthly','Weekly','Daily or almost daily'))
   return(y)
 }
+
+## function to run survival models
+run_survival = function(indata,
+                        outcome_date, # first date
+                        start_date, # date of randomisation
+                        censor_date # date of notes review
+){
+  # rename
+  index = which(names(indata) == outcome_date)
+  names(indata)[index] = 'outcome_date'
+  index = which(names(indata) == start_date)
+  names(indata)[index] = 'start_date'
+  index = which(names(indata) == censor_date)
+  names(indata)[index] = 'censor_date'
+  
+  # make data set
+  indata = filter(indata, !is.na(randomised)) %>%
+    mutate(event = !is.na(outcome_date), # event if there's an outcome date
+            last_date = ifelse(event==TRUE, outcome_date, censor_date), # use censor date if no outcome
+            last_date = as.Date(last_date, origin = '1970-01-01'),
+            time = last_date - start_date + 0.5, # difference in days
+            time = as.numeric(time) / 365.25 # convert to years
+        )
+  
+  ## create Kaplan-Meier
+  indata = mutate(indata, 
+                  random = ifelse(str_detect('New ', randomised), 'New model','Usual care'),
+                  random = factor(randomised)) # makes nicer labels
+  km = survfit(Surv(time, event==TRUE) ~ random, data = indata)
+  
+  # run Weibull model in nimble
+  source('99_run_weibull.R', local = environment())
+  
+  #
+  to_return = list()
+  to_return$survdata = indata
+  to_return$km = km
+  to_return$weibull = weibull
+  to_return$table = table
+  return(to_return)
+}
+
+
+# nice rename variable 
+nice_variable = function(invar){
+  out = case_when(
+    str_detect(invar, 'New model') ~ 'New model of care',
+    str_detect(invar, 'Male') ~ 'Male',
+    str_detect(invar, '\\bage\\b') ~ 'Age (+10 years)', # scaled
+    str_detect(invar, 'Sunshine') ~ 'Sunshine Coast',
+    invar == 'eq5d_b' ~ 'EQ-5D at baseline',
+    str_detect(invar, 'gp_baseline') ~ 'GP visits at baseline (log-transformed)',
+    str_detect(invar, 'dietician_baseline') ~ 'Saw nutritionist/dietician at baseline',
+    str_detect(invar, '\\bshape\\b') ~ 'Weibull shape'
+  )
+  return(out)
+}

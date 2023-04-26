@@ -1,5 +1,6 @@
 # 2_test_randomisation.R
 # graphical test of overall randomisation, using my code for fraud test
+# relies on data being in the `tab1` format
 # April 2022
 library(nimble) # for Bayesian model
 
@@ -9,9 +10,9 @@ source('C:\\Users\\barnetta\\OneDrive - Queensland University of Technology\\fra
 ## arrange summary data to match fraud functions
 # continuous
 stats1 = data.frame(N1 = tab1$ContTable$`New model of care`[,1],
-                     miss1 = tab1$ContTable$`New model of care`[,2],
-                     m1 = tab1$ContTable$`New model of care`[,4],
-                     sd1 = tab1$ContTable$`New model of care`[,5]) %>%
+                    miss1 = tab1$ContTable$`New model of care`[,2],
+                    m1 = tab1$ContTable$`New model of care`[,4],
+                    sd1 = tab1$ContTable$`New model of care`[,5]) %>%
   mutate(n1 = N1 - miss1) %>%
   tibble::rownames_to_column(var = "v1")
 stats2 = data.frame(N2 = tab1$ContTable$`Usual care`[,1],
@@ -29,7 +30,7 @@ for (v in variables){
   this_frame1 = tab1$CatTable$`New model of care`[[v]]
   this_frame1 = this_frame1[-1,] # remove reference row
   to_process1 = mutate(this_frame1, v1 = paste(v, level)) %>%
-      select(v1, n, miss, freq) %>%
+    select(v1, n, miss, freq) %>%
     mutate(freq = as.numeric(freq))
   cat1 = bind_rows(cat1, to_process1)
   #
@@ -135,7 +136,7 @@ tplot = ggplot(data=tstats, aes(x=t, size=factor(study), colour=factor(study))) 
   geom_segment(aes(x = 1.5, y = 0.5, xend = 0.9, yend = 0.6), colour='black', lwd=1, arrow = arrow(length = unit(0.03, "npc"))) # to highlight flat region
 
 # export image
-filename = 'results/cumulative_randomisation.jpg'
+filename = 'figures/cumulative_randomisation.jpg'
 jpeg(filename, width=5, height=4, units='in', res=400, quality=100)
 print(tplot)
 dev.off()

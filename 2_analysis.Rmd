@@ -1,0 +1,470 @@
+---
+title: "LOCATE: main analysis"
+author: "Adrian Barnett"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: word_document
+bibliography: references.bib
+---
+
+```{r setup, include=FALSE}
+# could add below to YAML
+#    reference_docx: rmarkdown-styles-SAP.docx
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, error=FALSE, comment='', dpi=400)
+options(width=1000) # Wide pages
+options(scipen=999) # avoid scientific presentation
+source('99_functions.R')
+library(knitr)
+library(dplyr)
+library(tidyr)
+library(flextable)
+library(janitor)
+library(stringr)
+library(survival)
+library(survminer) # for nice plots of survival models
+library(broom)
+# for graphics
+library(ggplot2)
+g.theme = theme_bw() + theme(panel.grid.minor = element_blank())
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+# colours for treatments
+group_colours = c('skyblue','darkorange')
+
+# data from 0_read_data_redcap.R
+load('data/0_redcap_data.RData')
+data = filter(data, !is.na(randomised)) # only those randomised
+# data from 0_read_data_scans.R
+load('data/0_scans.RData')
+
+# scramble treatment group
+scramble = TRUE
+if(scramble == TRUE){
+  TeachingDemos::char2seed('bradford')
+  rand = data$randomised
+  rand = sample(rand, size = length(rand), replace=FALSE)
+  data = select(data, -randomised) %>%
+    mutate(randomised = rand)
+}
+```
+
+The analysis uses the published protocol [@Brain2020].
+
+# Time to diagnosis of high-risk NAFLD (primary clinical outcome)
+
+_No results yet._
+
+This outcome was listed in the published protocol as the primary clinical outcome.
+
+# Time to first successful fibrosis assessment with Fibroscan
+
+_No results yet._
+
+This outcome was listed in the published protocol as a secondary clinical outcome.
+
+# Reduction in hospital admissions
+
+There were no admissions to hospital for any LOCATE participants, so we have not analysed this outcome.
+
+This outcome was listed in the published protocol as a secondary clinical outcome.
+
+# Reduction in emergency department presentations
+
+```{r, include = FALSE}
+result = run_survival(indata = data,
+                      outcome_date = 'ed_pres_1',
+                      start_date = 'date_returned',
+                      censor_date = 'review_date')
+```
+
+In this section we examine the time from randomisation to first emergency department presentation.
+
+This outcome was listed in the published protocol as a secondary clinical outcome.
+
+### Kaplan-Meier plot (time to ED presentation)
+
+```{r, fig.width=7, fig.height=6}
+# change strata labels 
+ggsurvplot(result$km, 
+           fun = 'event', # reverse curve to plot events
+           data = result$survdata, 
+           legend.title = '', # remove 'strata' from legend
+           xlab = 'Years since randomisation',
+           ylab = 'Cumulative presentations',
+           ylim = c(0, 0.5), 
+           palette = group_colours,
+           conf.int = FALSE,
+           ggtheme = theme_bw(),
+           risk.table = TRUE)
+#
+
+```
+
+We use a survival model to examine the time to ED presentation. Participants with no ED presentations were censored at their follow-up date. 
+
+### Weibull survival model (time to ED presentation)
+
+```{r}
+table = select(result$table, -'var') %>%
+  filter(!str_detect(variable, 'Intercept')) %>%
+  mutate(variable = nice_variable(variable))
+flextable(table) %>%
+  theme_box() %>%
+  autofit() %>%
+  colformat_double(j=2:4, digits=2)
+```
+
+The results show hazard ratios and 95% credible intervals (the model was fitted using a Bayesian approach). A hazard ratio over 1 indicates an increased hazard, meaning a faster time to ED presentation. 
+The model adjusted for gender, age and centre.
+
+# Reduced time to additional screening/testing for liver disease
+
+_No results yet._
+
+This outcome was listed in the published protocol as a secondary clinical outcome.
+
+# Employed at 12 months
+
+This outcome was listed in the published protocol.
+
+We cross-tabulate employment at 12 months with baseline employment.
+
+### Table (employment)
+
+```{r}
+#
+tab = group_by(data, randomised, employment, employment_12) %>%
+  tally() %>%
+  group_by(randomised) %>%
+  mutate(percent = round(prop.table(n)*100),
+         employment = ifelse(is.na(employment), 'Missing', employment),
+         employment_12 = ifelse(is.na(employment_12), 'Missing', employment_12),
+         cell = paste(n, ' (', percent, ')', sep='')) %>%
+  select(randomised, employment, employment_12, cell) %>%
+  pivot_wider( names_from='randomised', values_from='cell') %>%
+  mutate(`New model of care` = ifelse(is.na(`New model of care`), 0, `New model of care`),
+         `Usual care` = ifelse(is.na(`Usual care`), 0, `Usual care`)) %>%
+  rename(
+    'Employment at baseline' = 'employment',
+         'Employment at 12 months' = 'employment_12')
+# previous table
+tab_old = filter(data, !is.na(employment_12)) %>%
+  mutate(employment_12 = as.character(employment_12)) %>%
+  tabyl(var2 = randomised, var1 = employment_12) %>%
+  adorn_percentages(denominator = "col") %>%
+  adorn_pct_formatting() %>%
+  adorn_ns(position='front')
+names(tab_old)[1] =' '
+flextable(tab) %>%
+  theme_box() %>%
+  autofit()
+```
+
+## Other employment at baseline
+
+A lot of participants used the "other option for the employment question. Below is a list of the answers.
+
+```{r, include=FALSE}
+other_list = filter(data, 
+                    employment == 'Other (please describe below)',
+                    !is.na(employment_other)) %>%
+  select(record_id, randomised, employment_other)
+```
+
+##### Usual care at baseline
+
+```{r, results='asis'}
+other_list_1 = filter(other_list, randomised == 'Usual care') %>%
+  arrange(employment_other)
+for (k in 1:nrow(other_list_1)){
+  cat('* ', other_list_1$employment_other[k],'\n' , sep='')
+}
+```
+
+##### New model of care at baseline
+
+```{r, results='asis'}
+other_list_2 = filter(other_list, randomised == 'New model of care') %>%
+  arrange(employment_other)
+for (k in 1:nrow(other_list_2)){
+  cat('* ', other_list_2$employment_other[k],'\n' , sep='')
+}
+```
+
+## Other employment at 12 months
+
+
+```{r, include=FALSE}
+other_list = filter(data, 
+                    employment_12 == 'Other (please describe below)',
+                    !is.na(employment_other_12)) %>%
+  select(record_id, randomised, employment_other_12)
+```
+
+##### Usual care at 12 months
+
+```{r, results='asis'}
+other_list_1 = filter(other_list, randomised == 'Usual care') %>%
+  arrange(employment_other_12)
+for (k in 1:nrow(other_list_1)){
+  cat('* ', other_list_1$employment_other_12[k],'\n' , sep='')
+}
+```
+
+##### New model of care at 12 months
+
+```{r, results='asis'}
+other_list_2 = filter(other_list, randomised == 'New model of care') %>%
+  arrange(employment_other_12)
+for (k in 1:nrow(other_list_2)){
+  cat('* ', other_list_2$employment_other_12[k],'\n' , sep='')
+}
+```
+
+We can run a statistical model of employment, but need to agree on what we are interested in. It is just the "unemployed" category.
+
+
+# Improved health-related quality of life
+
+This outcome was listed in the published protocol as a secondary clinical outcome.
+
+### Boxplot (quality of life)
+
+```{r}
+bplot = ggplot(data= data, aes(x=randomised, y=eq5d_12m, col=randomised))+
+  geom_boxplot()+
+  scale_color_manual(NULL, values = group_colours)+
+  g.theme+
+  xlab('')+
+  ylab('EQ-5D')+
+  theme(legend.position = 'none')+
+  coord_flip()
+bplot
+```
+
+The higher the score, the better the quality of life.
+
+### Statistical model (quality of life)
+
+```{r}
+# model, control for baseline
+model = glm(eq5d_12m ~ eq5d_b + I(randomised == 'New model of care') + I(age/10) + sex + centrename, data = data)
+table = tidy(model, conf.int = TRUE) %>%
+  filter( term != '(Intercept)') %>%
+  select(term, estimate, conf.low, conf.high) %>%
+  rename('variable' = 'term') %>%
+  mutate(variable = nice_variable(variable))
+flextable(table) %>%
+  theme_box() %>%
+  autofit() %>%
+  colformat_double(j=2:4, digits=1)
+```
+
+The results are on the scale of EQ-5D from 0 to 100. The model adjusted for baseline EQ-5D, age, gender and centre.
+
+Because of missing follow-up data, there were `r length(model$linear.predictors)` participants available for this analysis.
+
+### Residual check (quality of life)
+
+```{r, fig.width=5}
+resid = data.frame(res = resid(model))
+hplot = ggplot(data= resid, aes(x=res) )+
+  geom_histogram(col='grey66', fill='darkseagreen3')+
+  xlab('Residual')+
+  ylab('Count')+
+  g.theme
+hplot
+```
+
+# Reduced hepatocellular carcinoma (HCC) detected outside specific surveillance
+
+There was only one diagnosis of HCC for any LOCATE participants, so we have not analysed this outcome.
+
+This outcome was listed in the published protocol as a secondary clinical outcome.
+
+# Reduced variceal bleeding occurring without variceal surveillance
+
+There were only two diagnoses of variceal bleeding for any LOCATE participants, so we have not analysed this outcome.
+
+This outcome was listed in the published protocol as a secondary clinical outcome.
+
+# Increased statin use
+
+This outcome was listed in the published protocol as a secondary clinical outcome.
+
+From the protocol: "Statin use will be compared between groups by examining the number of participants given a new statin script during the follow-up period. The denominator will be the number of patients not on statins at the time of their referral letter to the hepatology clinic." 
+
+### Table (statin use)
+
+```{r}
+tab = filter(data, !is.na(statin_12m)) %>%
+  mutate(statin_12m = as.character(statin_12m)) %>%
+  tabyl(var2 = randomised, var1 = statin_12m) %>%
+  adorn_percentages(denominator = "col") %>%
+  adorn_pct_formatting() %>%
+  adorn_ns(position='front')
+names(tab)[1] =' '
+flextable(tab) %>%
+  theme_box() %>%
+  autofit()
+```
+
+The table shows the number of participants and column percentages. This table is for all available participants, regardless of their statin use at baseline.
+
+### Statistical model (statin use)
+
+```{r}
+# model
+## ! not converging, dropped gender, which fixed it
+for_model = filter(data, statin_12m != 'Already on cholesterol lowering drugs 12 months ago')
+model = glm(statin_12m == 'Yes, started statin' ~ I(randomised == 'New model of care') + I(age/10) + centrename, data = for_model, family=binomial())
+table = tidy(model, conf.int = TRUE) %>%
+  filter(term != '(Intercept)') %>%
+  select(term, estimate, conf.low, conf.high) %>%
+  mutate(estimate = exp(estimate), # make into odds ratios
+         conf.low = exp(conf.low),
+         conf.high = exp(conf.high)) %>%
+  rename('variable' = 'term') %>%
+  mutate(variable = nice_variable(variable))
+flextable(table) %>%
+  theme_box() %>%
+  autofit() %>%
+  colformat_double(j=2:4, digits=2)
+```
+
+The dependent variable is starting a statin. 
+The model adjusted for age and centre. 
+The model did not converge when gender was included, hence this predictor was dropped. 
+We excluded those patients who were already on a statin at baseline. 
+
+
+# Increased referrals to a specialist, other than a hepatologist: dietician or psychologist
+
+This outcome was listed in the published protocol as a secondary clinical outcome.
+
+### Table (dietician or psychologist)
+
+```{r}
+#
+tab1 = filter(data, !is.na(dietician_12m)) %>%
+  mutate(dietician_12m = as.character(dietician_12m)) %>%
+  tabyl(var2 = randomised, var1 = dietician_12m) %>%
+  adorn_percentages(denominator = "col") %>%
+  adorn_pct_formatting() %>%
+  adorn_ns(position='front')
+names(tab1)[1] ='Dietician'
+#
+tab2 = filter(data, !is.na(psychologist_12m)) %>%
+  mutate(psychologist_12m = as.character(psychologist_12m)) %>%
+  tabyl(var2 = randomised, var1 = psychologist_12m) %>%
+  adorn_percentages(denominator = "col") %>%
+  adorn_pct_formatting() %>%
+  adorn_ns(position='front')
+names(tab2)[1] ='Psychologist'
+```
+
+#### Dietician
+
+```{r}
+flextable(tab1) %>%
+  theme_box() %>%
+  autofit()
+```
+
+#### Psychologist
+
+```{r}
+flextable(tab2) %>%
+  theme_box() %>%
+  autofit()
+```
+
+### Statistical model (Dietician)
+
+```{r}
+# model
+for_model = filter(data, !is.na(dietician_12m))
+model = glm(dietician_12m != 'No' ~ I(randomised == 'New model of care') + I(dietician_baseline != 'No') + I(age/10) + sex + centrename, data = for_model, family=binomial())
+table = tidy(model, conf.int = TRUE) %>%
+  filter( term != '(Intercept)') %>%
+  select(term, estimate, conf.low, conf.high) %>%
+  mutate(estimate = exp(estimate), # make into odds ratios
+         conf.low = exp(conf.low),
+         conf.high = exp(conf.high)) %>%
+  rename('variable' = 'term') %>%
+  mutate(variable = nice_variable(variable))
+flextable(table) %>%
+  theme_box() %>%
+  autofit() %>%
+  colformat_double(j=2:4, digits=2)
+```
+
+This model controls for whether the patient saw a nutritionist or dietician at baseline.
+
+### Statistical model (Psychologist)
+
+```{r}
+# model
+for_model = filter(data, !is.na(psychologist_12m))
+model = glm(psychologist_12m != 'No' ~ I(randomised == 'New model of care') + I(age/10) + sex + centrename, data = for_model, family=binomial())
+table = tidy(model, conf.int = TRUE) %>%
+  filter( term != '(Intercept)') %>%
+  select(term, estimate, conf.low, conf.high) %>%
+  mutate(estimate = exp(estimate), # make into odds ratios
+         conf.low = exp(conf.low),
+         conf.high = exp(conf.high)) %>%
+  rename('variable' = 'term') %>%
+  mutate(variable = nice_variable(variable))
+flextable(table) %>%
+  theme_box() %>%
+  autofit() %>%
+  colformat_double(j=2:4, digits=2)
+```
+
+# Increased GP use
+
+This outcome **was not** listed in the published protocol.
+
+### Boxplot (GP use)
+
+```{r}
+bplot = ggplot(data= data, aes(x=randomised, y=gp_12m, col=randomised))+
+  geom_boxplot()+
+  scale_color_manual(NULL, values = group_colours)+
+  g.theme+
+  xlab('')+
+  ylab('Number of GP visits in last year')+
+  theme(legend.position = 'none')+
+  coord_flip()
+bplot
+```
+
+The number of GP visits has a strong positive skew.
+
+### Statistical model (GP use)
+
+```{r}
+# 
+model = glm(gp_12m ~ I(randomised == 'New model of care') + log(gp_baseline + 1) + I(age/10) + sex + centrename, data = data, family=poisson())
+table = tidy(model, conf.int = TRUE) %>%
+  filter( term != '(Intercept)') %>%
+  select(term, estimate, conf.low, conf.high) %>%
+  rename('variable' = 'term') %>%
+  mutate(estimate = exp(estimate), # make into rate ratios 
+         conf.low = exp(conf.low),
+         conf.high = exp(conf.high),
+         variable = nice_variable(variable))
+flextable(table) %>%
+  theme_box() %>%
+  autofit() %>%
+  colformat_double(j=2:4, digits=2)
+```
+
+The model used a Poisson distribution, so the results are presented as rate ratios. We adjust for GP use at baseline. We also adjust for age and sex.
+
+# Reduced mortality
+
+There were no deaths for any LOCATE participants, so we have not analysed this outcome.
+
+This outcome was listed in the published protocol as a secondary clinical outcome.
+
+# References
+

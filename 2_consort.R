@@ -3,7 +3,6 @@
 # called by 2_descriptive_stats.Rmd
 library(diagram)
 
-
 # check of those without reason but not randomised
 filter(for_consort, is.na(reason), is.na(randomised))
 
@@ -19,18 +18,39 @@ exclusion_n = filter(for_consort,
   group_by(reason) %>%
   tally() %>%
   ungroup()
-# follow-up (dummy for now - use 12 month numbers once available)
-lost.fu.uc = nrow(filter(for_consort, !is.na(randomised), randomised == 'Usual care', !is.na(reason)))
+
+# withdrawn after randomisation
+withdrawn.uc = nrow(filter(for_consort, !is.na(randomised), randomised == 'Usual care', !is.na(reason)))
+withdrawn.nm = nrow(filter(for_consort, !is.na(randomised), randomised == 'New model of care', !is.na(reason)))
+
+
+# phone numbers
+analysed.uc.phone = nrow(filter(for_consort, 
+                           !is.na(phone_date), # got phoned
+                           !is.na(randomised), # got randomised
+                           randomised == 'Usual care'))
+analysed.nm.phone = nrow(filter(for_consort, 
+                                !is.na(phone_date), # got phoned
+                                !is.na(randomised), # got randomised
+                                randomised == 'New model of care'))
+# notes numbers
+analysed.uc.notes = nrow(filter(for_consort, 
+                                !is.na(review_date), # got notes
+                                !is.na(randomised), # got randomised
+                                randomised == 'Usual care'))
+analysed.nm.notes = nrow(filter(for_consort, 
+                                !is.na(review_date), # got notes
+                                !is.na(randomised), # got randomised
+                                randomised == 'New model of care'))
+
+# deaths
 died.uc = nrow(filter(for_consort, !is.na(randomised), randomised == 'Usual care', reason == 'Died'))
-lost.fu.nm = nrow(filter(for_consort, !is.na(randomised), randomised == 'New model of care', !is.na(reason)))
 died.nm = nrow(filter(for_consort, !is.na(randomised), randomised == 'New model of care', reason == 'Died'))
-analysed.uc = n_uc - lost.fu.uc
-analysed.nm = n_nm - lost.fu.nm
 
 ## Add per protocol definition
 # patients that attended their Fibroscan appointment and were able to be scanned
-pp.uc = analysed.uc # include all as PP does not apply
-pp.nm = nrow(filter(for_consort, randomised=='New model of care', pp==TRUE)) # to do, need scan data
+pp.uc = analysed.uc.notes # include all as PP does not apply because "treatment" is usual care, so it is whatever they did
+pp.nm = nrow(filter(for_consort, randomised=='New model of care', pp==TRUE)) # 
 
 # labels
 b = c('Enrollment', 'Allocation', 'Follow-up', 'Analysis')
@@ -38,13 +58,17 @@ l1 = paste('Approached\n(n=', n_approached, ')', sep='')
 l3 = paste('Randomised\n(n=', n_randomised, ')', sep='')
 l4 = paste('Usual care\n(n=', n_uc, ')', sep='')
 l5 = paste('New model\n(n=', n_nm, ')', sep='')
-l6 = paste('Lost to follow-up (n=', lost.fu.uc, ')\n', # usual care lost to fu
+l6 = paste('Withdrawn (n=', withdrawn.uc, ')\n', # usual care lost to fu
            '- Died (n=', died.uc,')', sep='')
-l7 = paste('Lost to follow-up (n=', lost.fu.nm, ')\n', # new mode lost to fu
+l7 = paste('Withdrawn (n=', withdrawn.nm, ')\n', # new mode lost to fu
            '- Died (n=', died.nm,')', sep='')
-l8 = paste('Analysed (n=', analysed.uc, ')\n', 
+l8 = paste('Analysed\n', 
+           '- Telephone follow-up (n=', analysed.uc.phone,')\n',
+           '- Routine data (n=', analysed.uc.notes,')\n',
            '- Per protocol (n=', pp.uc,')', sep='')
-l9 = paste('Analysed (n=', analysed.nm, ')\n', 
+l9 = paste('Analysed\n', 
+           '- Telephone follow-up (n=', analysed.nm.phone,')\n',
+           '- Routine data (n=', analysed.nm.notes,')\n',
            '- Per protocol (n=', pp.nm,')', sep='')
 # exclusion labels
 l2 = paste('Excluded (n=', sum(exclusion_n$n), ')\n',
@@ -63,17 +87,17 @@ frame = read.table(sep='\t', stringsAsFactors=F, skip=0, header=T, text='
 i	x	y	box.col	box.type	box.prop	box.size
 1	0.5	0.94	white	square	0.25	0.16
 2	0.77	0.79	white	square	0.47	0.23
-3	0.5	0.62	white	square	0.25	0.15
-4	0.26	0.45	white	square	0.23	0.2
-5	0.76	0.45	white	square	0.23	0.2
-6	0.26	0.27	white	square	0.2	0.2
-7	0.76	0.27	white	square	0.2	0.2
-8	0.26	0.10	white	square	0.2	0.2
-9	0.76	0.10	white	square	0.2	0.2
+3	0.5	0.64	white	square	0.25	0.15
+4	0.26	0.47	white	square	0.23	0.2
+5	0.76	0.47	white	square	0.23	0.2
+6	0.26	0.29	white	square	0.2	0.2
+7	0.76	0.29	white	square	0.2	0.2
+8	0.26	0.12	white	square	0.315	0.2
+9	0.76	0.12	white	square	0.315	0.2
 10	0.1	0.94	light blue	round	0.72	0.035
-11	0.51	0.53	light blue	round	0.7	0.035
-12	0.51	0.36	light blue	round	0.7	0.035
-13	0.51	0.18	light blue	round	0.7	0.035')
+11	0.51	0.55	light blue	round	0.7	0.035
+12	0.51	0.38	light blue	round	0.7	0.035
+13	0.51	0.22	light blue	round	0.7	0.035')
 pos = as.matrix(subset(frame, select=c(x, y)))
 M = matrix(nrow = n.labels, ncol = n.labels, byrow = TRUE, data = 0)
 M[3, 1] = "' '"
@@ -101,6 +125,6 @@ make_figure = function(){
 }
 
 #
-jpeg('figures/consort_flow.jpg', width=7.5, height=8, units='in', res=300, quality=100)
+jpeg('figures/consort_flow.jpg', width=7.5, height=8, units='in', res=500, quality=100)
 make_figure()
 dev.off()
