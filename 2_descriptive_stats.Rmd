@@ -28,7 +28,7 @@ g.theme = theme_bw() + theme(panel.grid.minor = element_blank())
 cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 
 # data from 0_read_data_redcap.R
-load('data/0_redcap_data.RData')
+load('data/1_redcap_data.RData')
 # data from 0_read_data_scans.R
 load('data/0_scans.RData')
 
@@ -152,7 +152,10 @@ Results from now on are only for the `r nrow(data)` randomised patients.
 
 ## Baseline summary table
 
-```{r}
+
+```{r, size="tiny"}
+## smaller font with chunk option - not working
+
 ## Vector of all variables to summarise (in order of form)
 myVars <- c("centrename","re_referral","referral_cat","age","sex","employment","height","weight","bmi","ast","alt","albumin","glucose","hba1c","hbsag","hepc_igg","platelet_count","ferritin","transferrin","alcohol","audit","eq5d_b",'dietician_baseline')
 ## Vector of categorical variables
@@ -174,6 +177,7 @@ print(tab1,
       formatOptions = list(big.mark = ","))
 ```
 
+
 The table shows numbers and percentages in round brackets for categorical variables, and the mean and standard deviation for continuous variables. We do not compare the two randomised groups using statistical tests as this is not good practice [@Altman1985]. Instead we present a graphical summary of the differences between groups.
 
 ### Test of randomisation
@@ -193,7 +197,7 @@ The plot shows no strong concerns about the trial. There is a small shortage of 
 
 ## Ultrasound (from referral letter at baseline)
 
-```{r}
+```{r, size="small"}
 ## Vector of all variables to summarise (in order of form)
 myVars <- c("spleen", "fatty_liver","liver_outline", "liver_size")
 ## Vector of categorical variables
@@ -218,7 +222,7 @@ The table shows numbers and percentages in round brackets.
 
 ## GP referral (from referral letter at baseline)
 
-```{r}
+```{r, size="small"}
 ## Vector of all variables to summarise (in order of form)
 myVars <- c("re_referral", "referral_cat", "referral_time", 'previous_hepatology')
 ## Vector of categorical variables
@@ -384,7 +388,7 @@ The statistics are in days.
 
 In this section examine the data extracted from the patients' notes at the one year follow-up.
 
-```{r}
+```{r, size="small"}
 # make dead variable
 data = mutate(data, 
               Dead = as.numeric(!is.na(death)),

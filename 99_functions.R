@@ -68,6 +68,13 @@ run_survival = function(indata,
             time = as.numeric(time) / 365.25 # convert to years
         )
   
+  # exclude any negative or missing times
+  negative = sum(indata$time <= 0, na.rm = TRUE) + sum(is.na(indata$time))
+  indata = filter(indata, time > 0)
+  
+  # total follow-up time
+  total_fu = sum(indata$time)
+  
   ## create Kaplan-Meier
   indata = mutate(indata, 
                   random = ifelse(str_detect('New ', randomised), 'New model','Usual care'),
@@ -79,10 +86,15 @@ run_survival = function(indata,
   
   #
   to_return = list()
+  to_return$events = events
+  to_return$censored = censored
   to_return$survdata = indata
+  to_return$negative = negative
   to_return$km = km
   to_return$weibull = weibull
   to_return$table = table
+  to_return$total_fu = total_fu
+  to_return$chain_plot = cplot
   return(to_return)
 }
 
@@ -92,12 +104,19 @@ nice_variable = function(invar){
   out = case_when(
     str_detect(invar, 'New model') ~ 'New model of care',
     str_detect(invar, 'Male') ~ 'Male',
+    str_detect(invar, 'phone_time') ~ 'Time since randomisation (months)',
     str_detect(invar, '\\bage\\b') ~ 'Age (+10 years)', # scaled
     str_detect(invar, 'Sunshine') ~ 'Sunshine Coast',
-    invar == 'eq5d_b' ~ 'EQ-5D at baseline',
+    invar == 'SD' ~ 'Standard deviation',
+    str_detect(invar, 'Intercept') ~ 'Intercept',
+    str_detect(invar, 'eq5d_b') ~ 'EQ-5D at baseline',
     str_detect(invar, 'gp_baseline') ~ 'GP visits at baseline (log-transformed)',
     str_detect(invar, 'dietician_baseline') ~ 'Saw nutritionist/dietician at baseline',
-    str_detect(invar, '\\bshape\\b') ~ 'Weibull shape'
+    str_detect(invar, '\\bshape\\b') ~ 'Weibull shape',
+    str_detect(invar, 'median1') ~ 'Median time (usual care)',
+    str_detect(invar, 'median2') ~ 'Median time (new model of care)',
+    str_detect(invar, 'mediandiff') ~ 'Median difference (usual care minus new model)',
+    TRUE ~ as.character(invar)
   )
   return(out)
 }

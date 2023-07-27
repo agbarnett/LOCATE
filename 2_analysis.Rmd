@@ -7,12 +7,12 @@ bibliography: references.bib
 ---
 
 ```{r setup, include=FALSE}
-# could add below to YAML
-#    reference_docx: rmarkdown-styles-SAP.docx
+# follows protocol: https://bmchealthservres.biomedcentral.com/articles/10.1186/s12913-020-05233-2
 knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, error=FALSE, comment='', dpi=400)
 options(width=1000) # Wide pages
 options(scipen=999) # avoid scientific presentation
 source('99_functions.R')
+source('99_glm_bayes.R') # for Bayesian glm model
 library(knitr)
 library(dplyr)
 library(tidyr)
@@ -22,23 +22,26 @@ library(stringr)
 library(survival)
 library(survminer) # for nice plots of survival models
 library(broom)
+library(nimble) # for Bayesian models
+library(mitools) # for multiple imputation
 # for graphics
 library(ggplot2)
+library(gridExtra)
 g.theme = theme_bw() + theme(panel.grid.minor = element_blank())
 cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
-# colours for treatments
+# colours for treatment groups
 group_colours = c('skyblue','darkorange')
 
-# data from 0_read_data_redcap.R
-load('data/0_redcap_data.RData')
+# data from 1_read_data_redcap.R
+load('data/1_redcap_data.RData')
 data = filter(data, !is.na(randomised)) # only those randomised
 # data from 0_read_data_scans.R
 load('data/0_scans.RData')
 
 # scramble treatment group
-scramble = TRUE
+scramble = FALSE
 if(scramble == TRUE){
-  TeachingDemos::char2seed('bradford')
+  TeachingDemos::char2seed('tranmere')
   rand = data$randomised
   rand = sample(rand, size = length(rand), replace=FALSE)
   data = select(data, -randomised) %>%
@@ -46,19 +49,204 @@ if(scramble == TRUE){
 }
 ```
 
-The analysis uses the published protocol [@Brain2020].
+The methods used here are based on the published protocol [@Brain2020]. Any changes to the protocol will be noted in the paper. The trial registration on ANZCTR is available [here](https://www.anzctr.org.au/Trial/Registration/TrialReview.aspx?id=378779&isReview=true).
+
+Changes to protocol:
+
+* The protocol used 8.0 kpa whereas the trial registration used 8.0 and 8.2 kpa to define high-risk. We used 8.0 kpa for the analysis. 
+
+* The protocol specified that outcomes would be examined using time since GP referral. However, we instead used time since randomisation. This is because the intervention can only have an impact after randomisation, and using time from GP referral would include a period of 'immortal time'.
+
+* Reduced time to additional screening/testing for liver disease was a planned outcome that was not included. We included time to first appointment at the hepatology clinic, which was not in the protocol.
+
+* Our protocol stated we would use data from the MBS and PBS. However, getting the necessary approvals for this data took much longer than anticipated. Rather than delay the start of the trial, we decided not to use the MBS/PBS data. We also removed the following planned inclusion criteria: "Consent to access of their data from Queensland Health and MBS and PBS".
+
+* Multiple outcomes in the protocol used a time point of "12 months post-baseline". However, because of delays in recruitment, we delayed the final follow-up until all patients had completed at least 12 months since randomisation. Hence the time-point used is "at least 12 months post-baseline." This decision was made on logistical grounds, as it was easier to do all follow-ups at the same time, and it had the added benefit of increasing the overall follow-up time and hence the statistical power.
+
+All these changes were made before the final analyses were run.
+
+# Statistical methods
+
+We used descriptive statistics to compare the randomised groups at baseline.
+
+Our primary outcome and some secondary outcomes were time to event outcomes. We therefore used a survival analysis approach, modelling the time to the outcome or right-censoring when data collection ended [@Dobson2018]. We used a Kaplan--Meier plot to graphically examine the difference between randomised groups. To estimate the difference between groups we used a Weibull regression model with randomised group as a predictor variable. We included other predictors that were likely to explain variance in the outcome, which were: age, gender and centre. The estimates from the Weibull model are hazard ratios and we include estimates of the median times for the usual care and new model of care groups, and the difference in these medians.
+
+We used a generalised linear model for the outcomes that were continuous (quality of life), counts (number of GP visits), and binary (using Statins). When available, we included the participants' baseline as a predictor, for example, including baseline EQ-5D in the quality of life model. 
+
+We used Bayesian methods for the regression models, and hence the results are presented as the mean differences with 95% credible intervals. We checked the convergence of the Bayesian models by plotting the chains for the intercept.
+
+We used multiple imputation when predictors were missing, using 10 imputations and combining the imputed estimates to give an overall result [@Sterne2009]. 
+We did not impute results when the outcome was missing and instead excluded participants with missing outcomes.
+
+We used the CONSORT guidelines to report the results [@Schulz2010].
+
 
 # Time to diagnosis of high-risk NAFLD (primary clinical outcome)
 
-_No results yet._
+```{r, include = FALSE}
+result = run_survival(indata = data,
+                      outcome_date = 'primary_date',
+                      start_date = 'date_returned', # date randomised
+                      censor_date = 'review_date')
+#
+plot_1 = result$chain_plot + ggtitle('High-risk NAFLD')
+```
 
 This outcome was listed in the published protocol as the primary clinical outcome.
 
+The start date is the date of GP referral, the end date is the date of high-risk diagnosis, and the censoring date is the date the patients' notes were examined by the study nurse.
+
+### Kaplan-Meier plot (primary clinical outcome)
+
+```{r, fig.width=7, fig.height=6}
+# change strata labels 
+ggsurvplot(result$km, 
+           fun = 'event', # reverse curve to plot events
+           data = result$survdata, 
+           legend.title = '', # remove 'strata' from legend
+           xlab = 'Years since randomisation',
+           ylab = 'Cumulative diagnoses',
+           ylim = c(0, 0.3), 
+           palette = group_colours,
+           conf.int = FALSE,
+           ggtheme = theme_bw(),
+           risk.table = TRUE)
+#
+```
+
+
+There were `r result$negative` participants excluded from this analysis due to negative or missing times. The total follow-up time is `r round(result$total_fu)` years. The total number of events is `r result$events` with `r result$censored` censored.
+
+The plot shows the estimated accumulation over time of participants diagnosed as high-risk. The vertical notches on the lines show when participants were right-censored as the follow-up time ended. The table below the graph shows the participants "at risk", meaning those who were yet to be diagnosed as high-risk.
+
+The plot shows an interesting pattern. There were some participants rapidly diagnosed in the new model care in the first few months, followed by no change for the next 2 years. In the usual care arm, the high-risk diagnoses accumulated steadily in the first year. 
+
+### Weibull survival model (primary clinical outcome)
+
+```{r}
+table = select(result$table, -'var') %>%
+  filter(!str_detect(variable, 'Intercept')) %>%
+  mutate(variable = nice_variable(variable))
+flextable(table) %>%
+  theme_box() %>%
+  autofit() %>%
+  colformat_double(j=2:4, digits=2)
+```
+
+Despite the strong separation in the Kaplan-Meier plot, the hazard ratio for the new model of care was wide and included an increased time to diagnosis. The estimated median times reflect the small number of events, with estimates of many years before half the sample will be diagnosed. 
+
+Age was associated with an increased hazard of the primary outcome. Every 10 year increase in age increased the hazard by 1.38, 95% confidence interval 1.05 to 1.85. This means that older patients had a shorter time to high-risk NAFLD.
+
+The Weibull shape controls the parametric hazard function over time. It is reported here for completeness and will not be included in the journal article.
+
 # Time to first successful fibrosis assessment with Fibroscan
 
-_No results yet._
+```{r, include = FALSE}
+result = run_survival(indata = data,
+                      outcome_date = 'scan_date', # was fibroscan_date_2 in error
+                      start_date = 'date_returned', # date randomised
+                      censor_date = 'review_date')
+#
+plot_2 = result$chain_plot + ggtitle('Time to Fibroscan')
+# get stats on all but one participant for intervention group
+time_stat = filter(data,randomised == 'New model of care') %>% 
+  mutate(time = scan_date - date_returned) %>%
+  summarise(est = round(quantile(time, 0.99, na.rm=TRUE)),
+            est = as.numeric(est))
+  
+```
 
 This outcome was listed in the published protocol as a secondary clinical outcome.
+
+There were `r result$negative` participants excluded from this analysis due to negative or missing times. The total follow-up time is `r round(result$total_fu)` years.
+
+### Kaplan-Meier plot (time to successful Fibroscan)
+
+```{r, fig.width=7, fig.height=6}
+# change strata labels 
+ggsurvplot(result$km, 
+           fun = 'event', # reverse curve to plot events
+           data = result$survdata, 
+           legend.title = '', # remove 'strata' from legend
+           xlab = 'Years since randomisation',
+           ylab = 'Cumulative scans',
+           ylim = c(0, 1), 
+           palette = group_colours,
+           conf.int = FALSE,
+           ggtheme = theme_bw(),
+           risk.table = TRUE)
+#
+```
+
+The plot shows the estimated accumulation over time of successful scans. The vertical notches on the lines show when participants were right-censored as the follow-up time ended. The table below the graph shows the participants "at risk", meaning those who are yet to have a Fibroscan. The total number of participants with a scan is `r result$events`, with `r result$censored` censored.
+
+Almost everyone in the new model of care had their scan within `r time_est` days. In contrast, the usual care group slowly accumulated scans over time. 
+
+### Weibull survival model (time to successful Fibroscan)
+
+```{r}
+table = select(result$table, -'var') %>%
+  filter(!str_detect(variable, 'Intercept')) %>%
+  mutate(variable = nice_variable(variable))
+flextable(table) %>%
+  theme_box() %>%
+  autofit() %>%
+  colformat_double(j=2:4, digits=2)
+```
+
+We used a Weibull regression model to estimate the time to Fibroscan. We included the randomised group and the potential predictors of gender, age and centre.
+
+The mean hazard ratio for the new model of care was well above one and the median reduction in time to scan was close to one year.
+
+
+# Time to first appointment at the hepatology clinic
+
+```{r, include = FALSE}
+result = run_survival(indata = data,
+                      outcome_date = 'date_first_appointment',
+                      start_date = 'date_returned', # date randomised
+                      censor_date = 'review_date')
+#
+plot_3 = result$chain_plot + ggtitle('First appointment')
+```
+
+This outcome **was not** in the published protocol.
+
+There were `r result$negative` participants excluded from this analysis due to negative or missing times. The total follow-up time is `r round(result$total_fu)` years.
+
+### Kaplan-Meier plot (time to first appointment)
+
+```{r, fig.width=7, fig.height=6}
+# change strata labels 
+ggsurvplot(result$km, 
+           fun = 'event', # reverse curve to plot events
+           data = result$survdata, 
+           legend.title = '', # remove 'strata' from legend
+           xlab = 'Years since randomisation',
+           ylab = 'Cumulative appointments',
+           ylim = c(0, 1), 
+           palette = group_colours,
+           conf.int = FALSE,
+           ggtheme = theme_bw(),
+           risk.table = TRUE)
+#
+```
+
+The total number of appointments is `r result$events`, with `r result$censored` censored.
+
+### Weibull survival model (time to first appointment)
+
+```{r}
+table = select(result$table, -'var') %>%
+  filter(!str_detect(variable, 'Intercept')) %>%
+  mutate(variable = nice_variable(variable))
+flextable(table) %>%
+  theme_box() %>%
+  autofit() %>%
+  colformat_double(j=2:4, digits=2)
+```
+
+Similarly to the previous primary outcome, the new model of care decreased the average time, but the 95% credible intervals were wide and included the potential for longer times with the new model of care.
 
 # Reduction in hospital admissions
 
@@ -71,13 +259,17 @@ This outcome was listed in the published protocol as a secondary clinical outcom
 ```{r, include = FALSE}
 result = run_survival(indata = data,
                       outcome_date = 'ed_pres_1',
-                      start_date = 'date_returned',
+                      start_date = 'date_returned', # randomisation date
                       censor_date = 'review_date')
+#
+plot_4 = result$chain_plot + ggtitle('ED presentations')
 ```
 
 In this section we examine the time from randomisation to first emergency department presentation.
 
 This outcome was listed in the published protocol as a secondary clinical outcome.
+
+There were `r result$negative` participants excluded from this analysis due to negative or missing times. The total follow-up time is `r round(result$total_fu)` years.
 
 ### Kaplan-Meier plot (time to ED presentation)
 
@@ -89,7 +281,7 @@ ggsurvplot(result$km,
            legend.title = '', # remove 'strata' from legend
            xlab = 'Years since randomisation',
            ylab = 'Cumulative presentations',
-           ylim = c(0, 0.5), 
+           ylim = c(0, 0.4), 
            palette = group_colours,
            conf.int = FALSE,
            ggtheme = theme_bw(),
@@ -99,6 +291,8 @@ ggsurvplot(result$km,
 ```
 
 We use a survival model to examine the time to ED presentation. Participants with no ED presentations were censored at their follow-up date. 
+
+The two cumulative incidence curves are very similar.
 
 ### Weibull survival model (time to ED presentation)
 
@@ -112,115 +306,12 @@ flextable(table) %>%
   colformat_double(j=2:4, digits=2)
 ```
 
-The results show hazard ratios and 95% credible intervals (the model was fitted using a Bayesian approach). A hazard ratio over 1 indicates an increased hazard, meaning a faster time to ED presentation. 
+The results show hazard ratios and 95% credible intervals (the model was fitted using a Bayesian method). A hazard ratio over 1 indicates an increased hazard, meaning a faster time to ED presentation. 
 The model adjusted for gender, age and centre.
 
-# Reduced time to additional screening/testing for liver disease
+The Sunshine Coast had a greatly reduced hazard ratio, meaning longer times to ED presentation. 
 
-_No results yet._
-
-This outcome was listed in the published protocol as a secondary clinical outcome.
-
-# Employed at 12 months
-
-This outcome was listed in the published protocol.
-
-We cross-tabulate employment at 12 months with baseline employment.
-
-### Table (employment)
-
-```{r}
-#
-tab = group_by(data, randomised, employment, employment_12) %>%
-  tally() %>%
-  group_by(randomised) %>%
-  mutate(percent = round(prop.table(n)*100),
-         employment = ifelse(is.na(employment), 'Missing', employment),
-         employment_12 = ifelse(is.na(employment_12), 'Missing', employment_12),
-         cell = paste(n, ' (', percent, ')', sep='')) %>%
-  select(randomised, employment, employment_12, cell) %>%
-  pivot_wider( names_from='randomised', values_from='cell') %>%
-  mutate(`New model of care` = ifelse(is.na(`New model of care`), 0, `New model of care`),
-         `Usual care` = ifelse(is.na(`Usual care`), 0, `Usual care`)) %>%
-  rename(
-    'Employment at baseline' = 'employment',
-         'Employment at 12 months' = 'employment_12')
-# previous table
-tab_old = filter(data, !is.na(employment_12)) %>%
-  mutate(employment_12 = as.character(employment_12)) %>%
-  tabyl(var2 = randomised, var1 = employment_12) %>%
-  adorn_percentages(denominator = "col") %>%
-  adorn_pct_formatting() %>%
-  adorn_ns(position='front')
-names(tab_old)[1] =' '
-flextable(tab) %>%
-  theme_box() %>%
-  autofit()
-```
-
-## Other employment at baseline
-
-A lot of participants used the "other option for the employment question. Below is a list of the answers.
-
-```{r, include=FALSE}
-other_list = filter(data, 
-                    employment == 'Other (please describe below)',
-                    !is.na(employment_other)) %>%
-  select(record_id, randomised, employment_other)
-```
-
-##### Usual care at baseline
-
-```{r, results='asis'}
-other_list_1 = filter(other_list, randomised == 'Usual care') %>%
-  arrange(employment_other)
-for (k in 1:nrow(other_list_1)){
-  cat('* ', other_list_1$employment_other[k],'\n' , sep='')
-}
-```
-
-##### New model of care at baseline
-
-```{r, results='asis'}
-other_list_2 = filter(other_list, randomised == 'New model of care') %>%
-  arrange(employment_other)
-for (k in 1:nrow(other_list_2)){
-  cat('* ', other_list_2$employment_other[k],'\n' , sep='')
-}
-```
-
-## Other employment at 12 months
-
-
-```{r, include=FALSE}
-other_list = filter(data, 
-                    employment_12 == 'Other (please describe below)',
-                    !is.na(employment_other_12)) %>%
-  select(record_id, randomised, employment_other_12)
-```
-
-##### Usual care at 12 months
-
-```{r, results='asis'}
-other_list_1 = filter(other_list, randomised == 'Usual care') %>%
-  arrange(employment_other_12)
-for (k in 1:nrow(other_list_1)){
-  cat('* ', other_list_1$employment_other_12[k],'\n' , sep='')
-}
-```
-
-##### New model of care at 12 months
-
-```{r, results='asis'}
-other_list_2 = filter(other_list, randomised == 'New model of care') %>%
-  arrange(employment_other_12)
-for (k in 1:nrow(other_list_2)){
-  cat('* ', other_list_2$employment_other_12[k],'\n' , sep='')
-}
-```
-
-We can run a statistical model of employment, but need to agree on what we are interested in. It is just the "unemployed" category.
-
+There was no apparent difference in median time between the new model of care and usual care.
 
 # Improved health-related quality of life
 
@@ -228,7 +319,7 @@ This outcome was listed in the published protocol as a secondary clinical outcom
 
 ### Boxplot (quality of life)
 
-```{r}
+```{r, fig.width=5, fig.height=3.5}
 bplot = ggplot(data= data, aes(x=randomised, y=eq5d_12m, col=randomised))+
   geom_boxplot()+
   scale_color_manual(NULL, values = group_colours)+
@@ -240,39 +331,46 @@ bplot = ggplot(data= data, aes(x=randomised, y=eq5d_12m, col=randomised))+
 bplot
 ```
 
-The higher the score, the better the quality of life.
+The higher the score, the better the quality of life. The highest possible score is 100, and the lowest 0. A few participants were close to zero.
 
 ### Statistical model (quality of life)
 
+```{r, include=FALSE}
+# Bayesian model, control for baseline, phone time centred at 12 months, where most results were done
+result = glm_bayes(indata = filter(data, !is.na(eq5d_12m)), # cannot use missing outcome
+                   equation = "eq5d_12m ~ I(eq5d_b-70) + I(randomised == 'New model of care') + I((age-50)/10) + sex + I(phone_time-12) + centrename")
+# 
+plot_5 = result$chain_plot + ggtitle('Quality of life')
+```
+
 ```{r}
-# model, control for baseline
-model = glm(eq5d_12m ~ eq5d_b + I(randomised == 'New model of care') + I(age/10) + sex + centrename, data = data)
-table = tidy(model, conf.int = TRUE) %>%
-  filter( term != '(Intercept)') %>%
-  select(term, estimate, conf.low, conf.high) %>%
-  rename('variable' = 'term') %>%
-  mutate(variable = nice_variable(variable))
-flextable(table) %>%
+#
+flextable(result$table) %>%
   theme_box() %>%
   autofit() %>%
   colformat_double(j=2:4, digits=1)
 ```
 
-The results are on the scale of EQ-5D from 0 to 100. The model adjusted for baseline EQ-5D, age, gender and centre.
+The results are on the scale of EQ-5D from 0 to 100. The model adjusted for baseline EQ-5D, age, gender, time since randomisation, and centre. Time since randomisation was added because there was some variance in when the participants were called, although most were close to the 12-month time.
 
-Because of missing follow-up data, there were `r length(model$linear.predictors)` participants available for this analysis.
+Because of missing follow-up data, there were `r result$N_participants` participants available for this analysis.
+
+There was little difference in quality of life between the usual care and new model of care groups. 
+
+Baseline quality of life was strongly predictive of follow-up quality of life, which is as expected.
 
 ### Residual check (quality of life)
 
 ```{r, fig.width=5}
-resid = data.frame(res = resid(model))
-hplot = ggplot(data= resid, aes(x=res) )+
+hplot = ggplot(data= result$resid, aes(x = resid) )+
   geom_histogram(col='grey66', fill='darkseagreen3')+
-  xlab('Residual')+
+  xlab('Residual (observed minus fitted)')+
   ylab('Count')+
   g.theme
 hplot
 ```
+
+There are no clear concerns in the residual plot. 
 
 # Reduced hepatocellular carcinoma (HCC) detected outside specific surveillance
 
@@ -311,36 +409,41 @@ The table shows the number of participants and column percentages. This table is
 
 ### Statistical model (statin use)
 
-```{r}
+```{r, include=FALSE}
 # model
-## ! not converging, dropped gender, which fixed it
-for_model = filter(data, statin_12m != 'Already on cholesterol lowering drugs 12 months ago')
-model = glm(statin_12m == 'Yes, started statin' ~ I(randomised == 'New model of care') + I(age/10) + centrename, data = for_model, family=binomial())
-table = tidy(model, conf.int = TRUE) %>%
-  filter(term != '(Intercept)') %>%
-  select(term, estimate, conf.low, conf.high) %>%
-  mutate(estimate = exp(estimate), # make into odds ratios
-         conf.low = exp(conf.low),
-         conf.high = exp(conf.high)) %>%
-  rename('variable' = 'term') %>%
-  mutate(variable = nice_variable(variable))
-flextable(table) %>%
+for_model = filter(data, statin_12m != 'Already on cholesterol lowering drugs 12 months ago') %>% # exclude this group
+  mutate(dep = as.numeric(statin_12m == 'Yes, started statin')) # make dependent variable
+result = glm_bayes(indata = for_model,
+                  equation = "dep ~ I(randomised == 'New model of care') + I((age-50)/10) + sex + centrename", 
+                  prior_sd = c(1000,1000,1000,2,1000), # tightened prior for men; first number is intercept
+                  family = 'binomial')
+# also tighten prior for centre?
+# 
+plot_6 = result$chain_plot + ggtitle('Statin use')
+```
+
+```{r}
+tab = filter(result$table, !str_detect(variable, 'Intercept'))
+flextable(tab) %>%
   theme_box() %>%
   autofit() %>%
   colformat_double(j=2:4, digits=2)
 ```
 
 The dependent variable is starting a statin. 
-The model adjusted for age and centre. 
-The model did not converge when gender was included, hence this predictor was dropped. 
-We excluded those patients who were already on a statin at baseline. 
+We excluded those patients who were already on a statin at baseline. The number of participants included was `r result$N_participants`.
+We used a logistic regression model so the table above shows the odds ratios and 95% credible intervals.
 
+The model adjusted for age, gender and centre. 
+There were no men who started a statin, hence the estimate for men was extremely variable. To account for this, we used a relatively tight Bayesian prior for gender, which helped give a more realistic estimate for this variable.
 
-# Increased referrals to a specialist, other than a hepatologist: dietician or psychologist
+The new model of care was associated with a much higher odds of new statin use, but the 95% credible intervals were wide and included a reduced use of new statins relative to the usual care group.
+
+# Increased referrals to a specialist, other than a hepatologist: dietician/nutritionist or psychologist
 
 This outcome was listed in the published protocol as a secondary clinical outcome.
 
-### Table (dietician or psychologist)
+### Table (dietician/nutritionist or psychologist)
 
 ```{r}
 #
@@ -350,7 +453,7 @@ tab1 = filter(data, !is.na(dietician_12m)) %>%
   adorn_percentages(denominator = "col") %>%
   adorn_pct_formatting() %>%
   adorn_ns(position='front')
-names(tab1)[1] ='Dietician'
+names(tab1)[1] ='Dietician/Nutritionist'
 #
 tab2 = filter(data, !is.na(psychologist_12m)) %>%
   mutate(psychologist_12m = as.character(psychologist_12m)) %>%
@@ -361,7 +464,7 @@ tab2 = filter(data, !is.na(psychologist_12m)) %>%
 names(tab2)[1] ='Psychologist'
 ```
 
-#### Dietician
+#### Dietician or Nutritionist
 
 ```{r}
 flextable(tab1) %>%
@@ -377,55 +480,76 @@ flextable(tab2) %>%
   autofit()
 ```
 
-### Statistical model (Dietician)
+### Statistical model (Dietician or nutritionist)
+
+```{r, include=FALSE}
+# model
+for_model = filter(data, !is.na(dietician_12m)) %>%
+  mutate(dep = as.numeric(dietician_12m != 'No')) # make dependent variable
+result = glm_bayes(indata = for_model,
+                   missing = 'dietician_baseline',
+                  equation = "dep ~ I(randomised == 'New model of care') + I(dietician_baseline != 'No') + I((age-50)/10) + sex + centrename", 
+                  family = 'binomial')
+# 
+plot_7 = result$chain_plot + ggtitle('Dietician')
+#
+n_missing_outcome = sum(is.na(data$dietician_12m))
+n_missing_predictor = sum(is.na(for_model$dietician_baseline))
+```
+
+There were `r n_missing_outcome` participants who were missing this outcome and so were excluded from this analysis.
+
+There were `r n_missing_predictor` participants with missing data for whether they had seen a dietician or nutritionist at baseline. We used multiple imputation to impute their missing values before running the model. 
+
+We used a logistic regression model so the table above shows the odds ratios and 95% credible intervals. The mean odds was much higher for the new model of care group, but the 95% credible interval included a higher odds for usual care. Participants who had seen a dietician or nutritionist at baseline were far more likely to see one at follow-up, which is as expected. Older participants were less likely to see a dietician or nutritionist.
 
 ```{r}
-# model
-for_model = filter(data, !is.na(dietician_12m))
-model = glm(dietician_12m != 'No' ~ I(randomised == 'New model of care') + I(dietician_baseline != 'No') + I(age/10) + sex + centrename, data = for_model, family=binomial())
-table = tidy(model, conf.int = TRUE) %>%
-  filter( term != '(Intercept)') %>%
-  select(term, estimate, conf.low, conf.high) %>%
-  mutate(estimate = exp(estimate), # make into odds ratios
-         conf.low = exp(conf.low),
-         conf.high = exp(conf.high)) %>%
-  rename('variable' = 'term') %>%
-  mutate(variable = nice_variable(variable))
-flextable(table) %>%
+tab = filter(result$table, !str_detect(variable, 'Intercept'))
+flextable(tab) %>%
   theme_box() %>%
   autofit() %>%
   colformat_double(j=2:4, digits=2)
 ```
 
-This model controls for whether the patient saw a nutritionist or dietician at baseline.
 
 ### Statistical model (Psychologist)
 
-```{r}
+```{r, include=FALSE}
+# model, removed centre, not converging?
 # model
-for_model = filter(data, !is.na(psychologist_12m))
-model = glm(psychologist_12m != 'No' ~ I(randomised == 'New model of care') + I(age/10) + sex + centrename, data = for_model, family=binomial())
-table = tidy(model, conf.int = TRUE) %>%
-  filter( term != '(Intercept)') %>%
-  select(term, estimate, conf.low, conf.high) %>%
-  mutate(estimate = exp(estimate), # make into odds ratios
-         conf.low = exp(conf.low),
-         conf.high = exp(conf.high)) %>%
-  rename('variable' = 'term') %>%
-  mutate(variable = nice_variable(variable))
-flextable(table) %>%
+for_model = filter(data, !is.na(psychologist_12m)) %>%
+  mutate(dep = as.numeric(psychologist_12m != 'No')) # make dependent variable
+result = glm_bayes(indata = for_model,
+                  equation = "dep ~ I(randomised == 'New model of care') + I((age-50)/10) + sex + centrename", 
+                  prior_sd = c(1000,1000,1000,1000,2), # tightened prior for centre; first number is intercept
+                  family = 'binomial')
+# 
+plot_8 = result$chain_plot + ggtitle('Psychologist')
+#
+n_missing_outcome = sum(is.na(data$psychologist_12m))
+```
+
+There were `r n_missing_outcome` participants who were missing this outcome and so were excluded from this analysis.
+
+```{r}
+tab = filter(result$table, !str_detect(variable, 'Intercept'))
+flextable(tab) %>%
   theme_box() %>%
   autofit() %>%
   colformat_double(j=2:4, digits=2)
 ```
 
+We used a logistic regression model so the table above shows the odds ratios and 95% credible intervals. The mean odds ratio was under 1 for the new model of care, but the credible intervals were wide. 
+
+None of the participants on the Sunshine Coast saw a psychologist in the last 12 months. We used a tighter Bayesian prior for centre to account for this.
+
 # Increased GP use
 
-This outcome **was not** listed in the published protocol.
+This outcome **was not** listed in the published protocol or trial registration.
 
 ### Boxplot (GP use)
 
-```{r}
+```{r, fig.width=5, fig.height=3.5}
 bplot = ggplot(data= data, aes(x=randomised, y=gp_12m, col=randomised))+
   geom_boxplot()+
   scale_color_manual(NULL, values = group_colours)+
@@ -437,34 +561,111 @@ bplot = ggplot(data= data, aes(x=randomised, y=gp_12m, col=randomised))+
 bplot
 ```
 
-The number of GP visits has a strong positive skew.
+The number of GP visits in the last year has a strong positive skew and four outliers of over 40 visits.
 
 ### Statistical model (GP use)
 
-```{r}
+```{r, include=FALSE}
 # 
-model = glm(gp_12m ~ I(randomised == 'New model of care') + log(gp_baseline + 1) + I(age/10) + sex + centrename, data = data, family=poisson())
-table = tidy(model, conf.int = TRUE) %>%
-  filter( term != '(Intercept)') %>%
-  select(term, estimate, conf.low, conf.high) %>%
-  rename('variable' = 'term') %>%
-  mutate(estimate = exp(estimate), # make into rate ratios 
-         conf.low = exp(conf.low),
-         conf.high = exp(conf.high),
-         variable = nice_variable(variable))
-flextable(table) %>%
+result = glm_bayes(indata = data,
+                  equation = "gp_12m ~ I(randomised == 'New model of care') + log(gp_baseline + 1) + I((age-50)/10) + sex + centrename", 
+                  missing = 'gp_baseline', # 
+                  family = 'poisson')
+# 
+plot_9 = result$chain_plot + ggtitle('GP use')
+#
+n_missing_outcome = sum(is.na(data$gp_12m))
+n_missing_predictor = sum(is.na(for_model$gp_baseline))
+```
+
+There were `r n_missing_outcome` participants who were missing this outcome and so were excluded from this analysis.
+
+There were `r n_missing_predictor` participants with missing data for their number of GP visits at baseline. We used multiple imputation to impute their missing values before running the model. 
+
+```{r}
+to_table = filter(result$table, !str_detect(variable, "Intercept")) # remove intercept
+flextable(to_table) %>%
   theme_box() %>%
   autofit() %>%
   colformat_double(j=2:4, digits=2)
 ```
 
-The model used a Poisson distribution, so the results are presented as rate ratios. We adjust for GP use at baseline. We also adjust for age and sex.
+The model used a Poisson distribution, so the results are presented as rate ratios. We adjust for GP use at baseline and, not surprisingly, there was a strong positive association between baseline GP usage and follow-up usage. We also adjust for age and sex.
+
+The new model of care was associated with a decrease in GP usage. 
+
+Older participants were more likely to visit the GP. Participants at the Sunshine Coast had a reduced rate of GP use.
+
+### Residual check (GP use)
+
+```{r, fig.width=5}
+hplot = ggplot(data= result$resid, aes(x = resid) )+
+  geom_histogram(col='grey66', fill='darkseagreen3')+
+  xlab('Residual (observed minus fitted)')+
+  ylab('Count')+
+  g.theme
+hplot
+```
+
+There are no clear concerns in the residual plot.
 
 # Reduced mortality
 
-There were no deaths for any LOCATE participants, so we have not analysed this outcome.
+There were no deaths for any LOCATE participants during the follow-up, so we have not analysed this outcome.
 
 This outcome was listed in the published protocol as a secondary clinical outcome.
+
+
+# Per protocol analysis
+
+```{r}
+tab = tabyl(data, pp, randomised) 
+#  adorn_percentages('col') %>%
+#  adorn_ns(position='front') # add back numbers
+names(tab)[1] ='Per protocol'
+flextable(tab) %>%
+  theme_box() %>%
+  autofit()
+```
+
+The table above shows the number of participants by randomised group that followed the per protocol definition. Only 2 patients did not follow the protocol. Given this small difference we will not run a separate per protocol analysis. 
+
+
+# Appendices
+
+The appendices contain technical details. Some may be included as appendices in the paper.
+
+### Bayesian models
+
+```{r, include=FALSE}
+source('99_mcmc.R')
+```
+
+The models were fitted using a Bayesian paradigm, so the results are given as means and 95% credible intervals, which have a more intuitive interpretation that standard 95% confidence intervals.
+
+We used the nimble package to fit the Bayesian models. We used `r n.chains` chains, with a burn-in of `r format(MCMC,big.mark=',')` followed by a sample of `r format(MCMC,big.mark=',')` thinned by `r thin`.
+
+### Bayesian model convergence
+
+In this section we show the graphical estimates of model convergence. 
+
+```{r, fig.width=9, fig.height=9}
+# 
+grid.arrange(plot_1, plot_2, plot_3, 
+             plot_4, plot_5, plot_6, 
+             plot_7, plot_8, plot_9, ncol = 3) 
+```
+
+All the chains appear to show good mixing and convergence, so there are no concerns for any of the models. 
+
+### R and package versions
+
+We used the following version of R and packages.
+
+```{r}
+sessionInfo()
+```
+
 
 # References
 

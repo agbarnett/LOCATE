@@ -1,6 +1,6 @@
 # 0_read_data_scans.R
-# read the data from the Fibroscanner
-# May 2022
+# read the data from the study Fibroscanner
+# May 2023
 library(readxl)
 library(dplyr)
 library(tidyverse)
@@ -74,7 +74,7 @@ for (f in to_read){ # used `text` for all to make binding easier
 }
 
 # tidy up scan data
-# to do: not yet confirmed that these are all the variables we need
+# not yet confirmed that these are all the variables we need
 scans = separate(raw_scans, exam_time, into=c('exam_hour','exam_min','exam_sec'), sep=':') %>%
   mutate(
     record_id = coalesce(code, pharma_study_code, pharma_patient_code), # ID number could be in any of these
@@ -123,4 +123,7 @@ save(scans, file = 'data/0_scans.RData')
 
 table(table(scans$record_id)) # should be 1
 
-
+## Compare scan dates with REDCap dates
+load('data/1_redcap_data.RData')
+data = select(data, record_id, fibroscan_date_2, kpa, cap) # slim down data
+compare = left_join(scans, data, by='record_id')
