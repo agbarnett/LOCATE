@@ -2,6 +2,7 @@
 Analysis of the NAFLD-LOCATE randomised trial.
 
 `data` folder contains synthetic data created using the [synthpop](https://cran.r-project.org/web/packages/synthpop/index.html) package.
+`images` folder contains images used to generate letters to GPs.
 
 ### R and package versions
 
