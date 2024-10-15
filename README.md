@@ -6,6 +6,8 @@ Analysis of the NAFLD-LOCATE randomised trial.
 
 `images` folder contains images used to generate letters to GPs.
 
+The sample size calculation using simulation is in `NAFLD.sample.size.survival.R`.
+
 ### R and package versions
 
 We used the following version of R and packages.
