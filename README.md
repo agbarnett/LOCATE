@@ -2,11 +2,13 @@
 
 Analysis of the NAFLD-LOCATE randomised trial.
 
-`data` folder contains synthetic data created using the [synthpop](https://cran.r-project.org/web/packages/synthpop/index.html) package.
+The `data` folder contains:
+* synthetic trial data created using the [synthpop](https://cran.r-project.org/web/packages/synthpop/index.html) package.
+* data from the discrete choice experiment for a chronic disease screening programme. 
 
-`images` folder contains images used to generate letters to GPs.
+The `images` folder contains images used to generate letters to GPs.
 
-The sample size calculation using simulation is in `NAFLD.sample.size.survival.R`.
+The trial sample size calculation using simulation is in `NAFLD.sample.size.survival.R`.
 
 ### R and package versions
 
