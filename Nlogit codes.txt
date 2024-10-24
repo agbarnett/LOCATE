@@ -1,0 +1,33 @@
+? Priors for the Ngene
+
+Nlogit
+;lhs = decision,cset,altij
+;choices = 1, 2
+;checkdata
+;model:
+
+U(2) = con 
+
+$
+Calc;LLASC=LogL$
+
+
+Nlogit
+;lhs = decision,cset,altij
+;choices = 1, 2
+;checkdata
+;model:
+
+U(2) = con + con_GP*con_GP + con_Hos*con_Hos + cost*cost+ wait*wait+ acc_85*acc_85 + acc_95*acc_95 + sou_2*sou_2 + sou_3*sou_3
+
+$
+
+Calc;LLMNL1=LogL$
+
+
+
+Calc
+;list
+;RhoSq1=1-(LLMNL1/LLASC)
+
+$

@@ -1,0 +1,30 @@
+Design
+? D-efficient
+
+;alts = op1*, op2*
+;rows = 30
+;eff = (mnl,d)
+;block = 3
+
+;alg = mfederov
+
+;model:
+
+U (op1) =
+b1.dummy [0|0] * conduct [1,2,3]        (5-15, 5-15, 5-15) +
+b2 [0.000001]  * accuracy [75, 85, 95]  (5-10, 10-15, 5-10) +
+b3 [-0.000001] * cost [0, 80, 250]      (5-10, 10-15, 5-10) +
+b4 [-0.000001] * time [2, 8, 24]        (5-10, 10-15, 5-10) +
+b5.dummy [0|0] * infor [1,2,3]          (5-15, 5-15, 5-15) 
+
+/
+
+U (op2) =
+b1.dummy    * conduct    +
+b2          * accuracy   +
+b3          * cost       +
+b4          * time       +
+b5.dummy    * infor 
+ 
+
+$
