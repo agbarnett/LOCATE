@@ -10,6 +10,10 @@ The `images` folder contains images used to generate letters to GPs.
 
 The trial sample size calculation using simulation is in `NAFLD.sample.size.survival.R`.
 
+### Discrete choice experiment
+
+The files `NGene Codes.txt` and `Nlogit codes.txt` are the NGene codes for analysing the discrete choice experiment. 
+
 ### R and package versions
 
 We used the following version of R and packages.
