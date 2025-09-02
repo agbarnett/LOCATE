@@ -90,6 +90,7 @@ result = run_survival(indata = data,
                       censor_date = 'review_date')
 #
 plot_1 = result$chain_plot + ggtitle('High-risk NAFLD')
+table_1 = result$summary_table
 ```
 
 This outcome was listed in the published protocol as the primary clinical outcome.
@@ -100,17 +101,23 @@ The start date is the date of GP referral, the end date is the date of high-risk
 
 ```{r, fig.width=7, fig.height=6}
 # change strata labels 
-ggsurvplot(result$km, 
+plot4 = ggsurvplot(result$km, 
            fun = 'event', # reverse curve to plot events
            data = result$survdata, 
            legend.title = '', # remove 'strata' from legend
            xlab = 'Years since randomisation',
            ylab = 'Cumulative diagnoses',
            ylim = c(0, 0.3), 
+           legend.labs = c('New model of care','Usual care'),
            palette = group_colours,
            conf.int = FALSE,
            ggtheme = theme_bw(),
-           risk.table = TRUE)
+           tables.y.text = FALSE, # for alignment, use colours instead of words
+          risk.table = TRUE)
+plot4
+jpeg('figures/time_to_primary_outcome.jpg', width=5.5, height=4.5, units='in', res=500)
+print(plot4)
+invisible(dev.off())
 #
 ```
 
@@ -148,6 +155,7 @@ result = run_survival(indata = data,
                       censor_date = 'review_date')
 #
 plot_2 = result$chain_plot + ggtitle('Time to Fibroscan')
+table_2 = result$summary_table
 # get stats on all but one participant for intervention group
 time_stat = filter(data,randomised == 'New model of care') %>% 
   mutate(time = scan_date - date_returned) %>%
@@ -164,23 +172,31 @@ There were `r result$negative` participants excluded from this analysis due to n
 
 ```{r, fig.width=7, fig.height=6}
 # change strata labels 
-ggsurvplot(result$km, 
+plot1 = ggsurvplot(result$km, 
            fun = 'event', # reverse curve to plot events
            data = result$survdata, 
            legend.title = '', # remove 'strata' from legend
            xlab = 'Years since randomisation',
            ylab = 'Cumulative scans',
            ylim = c(0, 1), 
+           legend.labs = c('New model of care','Usual care'),
            palette = group_colours,
            conf.int = FALSE,
            ggtheme = theme_bw(),
-           risk.table = TRUE)
+           tables.y.text = FALSE, # for alignment, use colours instead of words
+           risk.table = TRUE)# 
+plot1
+jpeg('figures/time_to_fibroscan.jpg', width=5.5, height=4.5, units='in', res=500)
+print(plot1)
+invisible(dev.off())
+
 #
 ```
 
-The plot shows the estimated accumulation over time of successful scans. The vertical notches on the lines show when participants were right-censored as the follow-up time ended. The table below the graph shows the participants "at risk", meaning those who are yet to have a Fibroscan. The total number of participants with a scan is `r result$events`, with `r result$censored` censored.
+The plot shows the estimated accumulation over time of successful scans. The vertical notches on the lines show when participants were right-censored as the follow-up time ended. The table below the graph shows the participants "at risk", meaning those who are yet to have a Fibroscan. 
+The total number of participants with a scan is `r result$events`, with `r result$censored` censored.
 
-Almost everyone in the new model of care had their scan within `r time_est` days. In contrast, the usual care group slowly accumulated scans over time. 
+Almost everyone in the new model of care had their scan within `r time_stat$est` days. In contrast, the usual care group slowly accumulated scans over time. 
 
 ### Weibull survival model (time to successful Fibroscan)
 
@@ -208,6 +224,7 @@ result = run_survival(indata = data,
                       censor_date = 'review_date')
 #
 plot_3 = result$chain_plot + ggtitle('First appointment')
+table_3 = result$summary_table
 ```
 
 This outcome **was not** in the published protocol.
@@ -218,17 +235,23 @@ There were `r result$negative` participants excluded from this analysis due to n
 
 ```{r, fig.width=7, fig.height=6}
 # change strata labels 
-ggsurvplot(result$km, 
+plot2 = ggsurvplot(result$km, 
            fun = 'event', # reverse curve to plot events
            data = result$survdata, 
            legend.title = '', # remove 'strata' from legend
            xlab = 'Years since randomisation',
            ylab = 'Cumulative appointments',
            ylim = c(0, 1), 
+           legend.labs = c('New model of care','Usual care'),
            palette = group_colours,
            conf.int = FALSE,
            ggtheme = theme_bw(),
-           risk.table = TRUE)
+           tables.y.text = FALSE, # for alignment, use colours instead of words
+          risk.table = TRUE)
+plot2
+jpeg('figures/time_to_first_appointment.jpg', width=5.5, height=4.5, units='in', res=500)
+print(plot2)
+invisible(dev.off())
 #
 ```
 
@@ -263,6 +286,7 @@ result = run_survival(indata = data,
                       censor_date = 'review_date')
 #
 plot_4 = result$chain_plot + ggtitle('ED presentations')
+table_4 = result$summary_table
 ```
 
 In this section we examine the time from randomisation to first emergency department presentation.
@@ -275,19 +299,24 @@ There were `r result$negative` participants excluded from this analysis due to n
 
 ```{r, fig.width=7, fig.height=6}
 # change strata labels 
-ggsurvplot(result$km, 
+plot3 = ggsurvplot(result$km, 
            fun = 'event', # reverse curve to plot events
            data = result$survdata, 
            legend.title = '', # remove 'strata' from legend
            xlab = 'Years since randomisation',
            ylab = 'Cumulative presentations',
            ylim = c(0, 0.4), 
+           legend.labs = c('New model of care','Usual care'),
            palette = group_colours,
            conf.int = FALSE,
            ggtheme = theme_bw(),
-           risk.table = TRUE)
+           tables.y.text = FALSE, # for alignment, use colours instead of words
+          risk.table = TRUE)
+plot3
+jpeg('figures/time_to_ed.jpg', width=5.5, height=4.5, units='in', res=500)
+print(plot3)
+invisible(dev.off())
 #
-
 ```
 
 We use a survival model to examine the time to ED presentation. Participants with no ED presentations were censored at their follow-up date. 
@@ -657,6 +686,47 @@ grid.arrange(plot_1, plot_2, plot_3,
 ```
 
 All the chains appear to show good mixing and convergence, so there are no concerns for any of the models. 
+
+### Summary table of survival models
+
+```{r}
+stable = bind_rows(table_1, table_2, table_3,
+                   table_4) %>%
+  mutate(total_fu = round(total_fu),
+   outcome = case_when(outcome == 'primary_date' ~ 'High-risk diagnosis',
+       outcome == 'scan_date' ~ 'Fibroscan',
+       outcome == 'date_first_appointment' ~ 'Appointment at the hepatology clinic',
+       outcome == 'ed_pres_1' ~ 'ED presentation',
+       TRUE ~ as.character(outcome))) %>%
+  rename('Outcome' = 'outcome',
+         'Number of participants' = 'n',
+         'Number censored' = 'censored',
+         'Total follow-up time' = 'total_fu')
+flextable(stable) %>%
+  theme_box() %>%
+  autofit()
+```
+
+The summary table gives the number of participants, numbers censored, and total follow-up time. 
+
+# Time between referral and randomisation
+
+```{r}
+# calculate difference
+diff = mutate(data, diff = as.numeric(date_returned - date_of_referral))
+hplot = ggplot(data = diff, aes(x=diff))+
+  geom_histogram(fill = 'darkseagreen3', col='grey44')+
+  g.theme+
+  xlab('Days between referral and randomisation')+
+  ylab('Number of participants')
+hplot
+ggsave(hplot, file='figures/time_referral_random.jpg', width=5, height=4, units='in', dpi=400)
+# for text
+rmedian = median(diff$diff)
+```
+
+The median time between referral and randomisation was `r round(rmedian)` days.
+
 
 ### R and package versions
 

@@ -78,6 +78,7 @@ l2 = paste('Excluded (n=', sum(exclusion_n$n), ')\n',
            '- Plans to move (n=', filter(exclusion_n, reason == 'Plans to move')$n, ')\n',
            '- Terminal illness (n=', filter(exclusion_n, reason == 'Terminal illness')$n, ')\n',
            '- No time (n=', filter(exclusion_n, reason == 'No time to take part')$n, ')\n',
+           '- No reason given (n=', filter(exclusion_n, reason == 'No reason given')$n, ')\n',
            '- Other reasons (n=', filter(exclusion_n, reason == 'Other')$n, ')', sep='')
 
 labels = c(l1, l2, l3, l4, l5, l6, l7, l8, l9, b)
@@ -86,18 +87,18 @@ n.labels = length(labels)
 frame = read.table(sep='\t', stringsAsFactors=F, skip=0, header=T, text='
 i	x	y	box.col	box.type	box.prop	box.size
 1	0.5	0.94	white	square	0.25	0.16
-2	0.77	0.79	white	square	0.47	0.23
-3	0.5	0.64	white	square	0.25	0.15
-4	0.26	0.47	white	square	0.23	0.2
-5	0.76	0.47	white	square	0.23	0.2
-6	0.26	0.29	white	square	0.2	0.2
-7	0.76	0.29	white	square	0.2	0.2
-8	0.26	0.12	white	square	0.315	0.2
-9	0.76	0.12	white	square	0.315	0.2
+2	0.77	0.78	white	square	0.52	0.23
+3	0.5	0.62	white	square	0.25	0.15
+4	0.26	0.45	white	square	0.23	0.2
+5	0.76	0.45	white	square	0.23	0.2
+6	0.26	0.27	white	square	0.2	0.2
+7	0.76	0.27	white	square	0.2	0.2
+8	0.26	0.11	white	square	0.315	0.2
+9	0.76	0.11	white	square	0.315	0.2
 10	0.1	0.94	light blue	round	0.72	0.035
-11	0.51	0.55	light blue	round	0.7	0.035
-12	0.51	0.38	light blue	round	0.7	0.035
-13	0.51	0.22	light blue	round	0.7	0.035')
+11	0.51	0.53	light blue	round	0.7	0.035
+12	0.51	0.36	light blue	round	0.7	0.035
+13	0.51	0.20	light blue	round	0.7	0.035')
 pos = as.matrix(subset(frame, select=c(x, y)))
 M = matrix(nrow = n.labels, ncol = n.labels, byrow = TRUE, data = 0)
 M[3, 1] = "' '"
@@ -125,6 +126,6 @@ make_figure = function(){
 }
 
 #
-jpeg('figures/consort_flow.jpg', width=7.5, height=8, units='in', res=500, quality=100)
+jpeg('figures/consort_flow.jpg', width=7.5, height=8, units='in', res=700, quality=100)
 make_figure()
 dev.off()
